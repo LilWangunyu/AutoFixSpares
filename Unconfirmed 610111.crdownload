@@ -1,0 +1,170 @@
+// -------------------------------
+// Replace these firebaseConfig values with your project's config
+// Get them from Firebase Console: Project Settings -> SDK setup and configuration -> Firebase SDK snippet (config)
+// -------------------------------
+var firebaseConfig = {
+  apiKey: "REPLACE_API_KEY",
+  authDomain: "REPLACE_PROJECT_ID.firebaseapp.com",
+  projectId: "REPLACE_PROJECT_ID",
+  storageBucket: "REPLACE_PROJECT_ID.appspot.com",
+  messagingSenderId: "REPLACE_SENDER_ID",
+  appId: "REPLACE_APP_ID"
+};
+// -------------------------------
+
+if (!firebase.apps.length) {
+  firebase.initializeApp(firebaseConfig);
+}
+const db = firebase.firestore();
+const auth = firebase.auth();
+
+// ----- Elements -----
+const inventoryTableBody = document.querySelector('#inventoryTable tbody');
+const partSelect = document.getElementById('partSelect');
+const searchInput = document.getElementById('searchInput');
+
+// Load inventory live and populate table + dropdown
+function loadInventory() {
+  db.collection('spareParts').orderBy('name')
+    .onSnapshot(snapshot => {
+      // Clear UI
+      inventoryTableBody.innerHTML = '';
+      partSelect.innerHTML = '<option value="">-- Select part --</option>';
+      snapshot.forEach(doc => {
+        const d = doc.data();
+        const id = doc.id;
+        // Table row
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${escapeHtml(d.name || '—')}</td>
+          <td>${numberWithCommas(d.price || 0)}</td>
+          <td>${d.stock ?? 0}</td>
+          <td></td>
+        `;
+        // Order button cell
+        const orderCell = tr.cells[3];
+        if ((d.stock ?? 0) > 0) {
+          const btn = document.createElement('button');
+          btn.className = 'btn small';
+          btn.textContent = 'Order';
+          btn.onclick = () => { partSelect.value = id; window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' }); };
+          orderCell.appendChild(btn);
+        } else {
+          orderCell.textContent = 'Out of stock';
+        }
+        inventoryTableBody.appendChild(tr);
+
+        // Dropdown option
+        const opt = document.createElement('option');
+        opt.value = id;
+        opt.text = `${d.name} (KSh ${numberWithCommas(d.price || 0)})`;
+        partSelect.add(opt);
+      });
+    }, err => {
+      console.error('Error loading inventory:', err);
+      alert('Error loading inventory from Firebase. Check console.');
+    });
+}
+
+// Filter inventory table by name (search)
+function filterParts() {
+  const q = (searchInput.value || '').toLowerCase();
+  const rows = inventoryTableBody.querySelectorAll('tr');
+  rows.forEach(row => {
+    const name = (row.cells[0].innerText || '').toLowerCase();
+    row.style.display = name.includes(q) ? '' : 'none';
+  });
+}
+
+// Place an online order (creates order doc + decrements stock + generates receipt)
+async function placeOrder() {
+  try {
+    const partId = partSelect.value;
+    const qty = parseInt(document.getElementById('orderQty').value || 0, 10);
+    const name = document.getElementById('custName').value.trim();
+    const email = document.getElementById('custEmail').value.trim();
+    const phone = document.getElementById('custPhone').value.trim();
+    if (!partId || !qty || !name || !email || !phone) {
+      alert('Please fill all fields.');
+      return;
+    }
+
+    const partRef = db.collection('spareParts').doc(partId);
+    const partSnap = await partRef.get();
+    if (!partSnap.exists) { alert('Selected part not found.'); return; }
+    const part = partSnap.data();
+    if ((part.stock ?? 0) < qty) { alert('Insufficient stock.'); return; }
+
+    const total = (part.price || 0) * qty;
+
+    // Add order record
+    await db.collection('orders').add({
+      name, email, phone,
+      partId, quantity: qty,
+      status: 'new',
+      walkIn: false,
+      timestamp: firebase.firestore.Timestamp.now(),
+      total
+    });
+
+    // Decrement stock atomically
+    await partRef.update({ stock: firebase.firestore.FieldValue.increment(-qty) });
+
+    // generate receipt and prompt download
+    generateReceipt({
+      name,
+      partName: part.name,
+      quantity: qty,
+      price: part.price,
+      total,
+      timestamp: new Date()
+    });
+
+    alert('Order placed successfully!');
+    document.getElementById('orderForm').reset();
+  } catch (err) {
+    console.error('Error placing order:', err);
+    alert('Error placing order. See console for details.');
+  }
+}
+
+// Small utility: generate a simple PDF receipt using jsPDF
+function generateReceipt(o) {
+  try {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit: 'pt' });
+    doc.setFontSize(18);
+    doc.text('AutoFix Spare Parts — Receipt', 40, 60);
+
+    doc.setFontSize(11);
+    doc.text(`Date: ${o.timestamp.toLocaleString()}`, 40, 90);
+    doc.text(`Customer: ${o.name}`, 40, 110);
+    doc.text(`Item: ${o.partName}`, 40, 130);
+    doc.text(`Quantity: ${o.quantity}`, 40, 150);
+    doc.text(`Price (each): KSh ${numberWithCommas(o.price)}`, 40, 170);
+    doc.setFontSize(13);
+    doc.text(`Total: KSh ${numberWithCommas(o.total)}`, 40, 200);
+
+    doc.setFontSize(10);
+    doc.text('Thank you for your purchase. AutoFix Spare Parts', 40, 240);
+
+    const fileName = `receipt_${Date.now()}.pdf`;
+    doc.save(fileName);
+  } catch (err) {
+    console.error('Could not create PDF:', err);
+  }
+}
+
+// Helpers
+function numberWithCommas(x) {
+  if (x === null || x === undefined) return '0';
+  return x.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+}
+function escapeHtml(str) {
+  return (str+'').replace(/[&<>"']/g, (m) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+
+// Init
+document.addEventListener('DOMContentLoaded', () => {
+  loadInventory();
+});

@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>AutoFix — Staff Login</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-auth-compat.js"></script>
+</head>
+<body>
+  <main class="container">
+    <section>
+      <h2>Staff Login</h2>
+      <form id="loginForm" onsubmit="event.preventDefault(); loginStaff();">
+        <label>Email</label>
+        <input id="staffEmail" type="email" required>
+        <label>Password</label>
+        <input id="staffPass" type="password" required>
+        <button class="btn" type="submit">Log In</button>
+      </form>
+      <p style="color:#666; font-size:13px;">If you don't have an account create one in Firebase Console (Authentication → Users) or contact the site admin.</p>
+      <p><a href="index.html">Back to shop</a></p>
+    </section>
+  </main>
+
+  <script>
+  // Paste same firebaseConfig as in script.js
+  var firebaseConfig = {
+    apiKey: "REPLACE_API_KEY",
+    authDomain: "REPLACE_PROJECT_ID.firebaseapp.com",
+    projectId: "REPLACE_PROJECT_ID",
+    storageBucket: "REPLACE_PROJECT_ID.appspot.com",
+    messagingSenderId: "REPLACE_SENDER_ID",
+    appId: "REPLACE_APP_ID"
+  };
+  if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+  const auth = firebase.auth();
+
+  async function loginStaff() {
+    const email = document.getElementById('staffEmail').value.trim();
+    const pass = document.getElementById('staffPass').value;
+    try {
+      await auth.signInWithEmailAndPassword(email, pass);
+      // on success go to staff dashboard
+      window.location = 'staff.html';
+    } catch (err) {
+      console.error('Login error', err);
+      alert('Login failed: ' + err.message);
+    }
+  }
+  </script>
+</body>
+</html>

@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>AutoFix — Staff Dashboard</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-auth-compat.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <h1>Staff Dashboard</h1>
+    <nav><button class="btn small" onclick="logout()">Log out</button></nav>
+  </header>
+
+  <main class="container">
+    <section>
+      <h3>Online Orders (New → Ready → Completed)</h3>
+      <table id="ordersTable" class="striped">
+        <thead><tr><th>Customer</th><th>Part</th><th>Qty</th><th>Total (KSh)</th><th>Status</th><th>Action</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <section>
+      <h3>Record Walk-In Sale</h3>
+      <form id="walkinForm" onsubmit="event.preventDefault(); logWalkIn();">
+        <label>Name</label><input id="walkName" required />
+        <label>Email (optional)</label><input id="walkEmail" type="email" />
+        <label>Phone</label><input id="walkPhone" required />
+        <label>Part</label><select id="walkPartSelect" required><option value="">-- Select part --</option></select>
+        <label>Quantity</label><input id="walkQty" type="number" min="1" value="1" required />
+        <button class="btn" type="submit">Record Sale</button>
+      </form>
+    </section>
+  </main>
+
+  <script>
+  // Paste same firebaseConfig as earlier
+  var firebaseConfig = {
+    apiKey: "REPLACE_API_KEY",
+    authDomain: "REPLACE_PROJECT_ID.firebaseapp.com",
+    projectId: "REPLACE_PROJECT_ID",
+    storageBucket: "REPLACE_PROJECT_ID.appspot.com",
+    messagingSenderId: "REPLACE_SENDER_ID",
+    appId: "REPLACE_APP_ID"
+  };
+  if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+  const db = firebase.firestore();
+  const auth = firebase.auth();
+
+  // protect page: redirect if not logged in
+  auth.onAuthStateChanged(user => {
+    if (!user) {
+      window.location = 'login.html';
+    } else {
+      // user is logged in → proceed to load data
+      loadPartsForWalkin();
+      loadOrders();
+    }
+  });
+
+  function logout() {
+    auth.signOut().then(()=> window.location = 'login.html');
+  }
+
+  // Populate available parts dropdown for walk-in sales
+  function loadPartsForWalkin(){
+    const sel = document.getElementById('walkPartSelect');
+    db.collection('spareParts').orderBy('name').onSnapshot(snapshot=>{
+      sel.innerHTML = '<option value="">-- Select part --</option>';
+      snapshot.forEach(doc => {
+        const d = doc.data();
+        if ((d.stock ?? 0) > 0) {
+          const opt = document.createElement('option');
+          opt.value = doc.id;
+          opt.text = `${d.name} (KSh ${d.price}) - ${d.stock} in stock`;
+          sel.add(opt);
+        }
+      });
+    });
+  }
+
+  // Load online orders (all orders) and show buttons to process them
+  function loadOrders(){
+    const tbody = document.querySelector('#ordersTable tbody');
+    db.collection('orders').orderBy('timestamp','desc').onSnapshot(async snapshot => {
+      tbody.innerHTML = '';
+      snapshot.forEach(async doc => {
+        const o = doc.data();
+        const id = doc.id;
+
+        // Show all orders (online and walk-in) — staff may prefer filtering; here we show both
+        const tr = document.createElement('tr');
+        const nameCell = document.createElement('td');
+        nameCell.innerText = o.name;
+        tr.appendChild(nameCell);
+
+        // Part name fetch
+        const partCell = document.createElement('td');
+        tr.appendChild(partCell);
+        db.collection('spareParts').doc(o.partId).get().then(psnap=>{
+          const pd = psnap.exists ? psnap.data() : { name: 'Unknown' };
+          partCell.innerText = pd.name;
+        });
+
+        const qtyCell = document.createElement('td');
+        qtyCell.innerText = o.quantity;
+        tr.appendChild(qtyCell);
+
+        const totalCell = document.createElement('td');
+        totalCell.innerText = numberWithCommas(o.total || 0);
+        tr.appendChild(totalCell);
+
+        const statusCell = document.createElement('td');
+        statusCell.innerText = o.status || '';
+        tr.appendChild(statusCell);
+
+        const actionCell = document.createElement('td');
+        // Actions depend on status and whether walkIn
+        if (o.walkIn) {
+          actionCell.innerHTML = '<em>Walk-in (recorded)</em>';
+        } else {
+          if (o.status === 'new') {
+            const btn = document.createElement('button');
+            btn.className = 'btn small';
+            btn.textContent = 'Mark Ready';
+            btn.onclick = () => db.collection('orders').doc(id).update({ status: 'ready' });
+            actionCell.appendChild(btn);
+          } else if (o.status === 'ready') {
+            const btn = document.createElement('button');
+            btn.className = 'btn small';
+            btn.textContent = 'Complete';
+            btn.onclick = () => db.collection('orders').doc(id).update({ status: 'completed' });
+            actionCell.appendChild(btn);
+          } else {
+            actionCell.innerText = 'Completed';
+          }
+        }
+
+        // Option to download receipt (recreate from order doc)
+        const rbtn = document.createElement('button');
+        rbtn.className = 'btn small';
+        rbtn.textContent = 'Receipt';
+        rbtn.style.marginLeft = '6px';
+        rbtn.onclick = async () => {
+          // create quick receipt using current known data
+          const partSnap = await db.collection('spareParts').doc(o.partId).get();
+          const pname = partSnap.exists ? partSnap.data().name : 'Unknown';
+          generateReceipt({
+            name: o.name,
+            partName: pname,
+            quantity: o.quantity,
+            price: (o.total && o.quantity) ? Math.round((o.total / o.quantity)) : 0,
+            total: o.total || 0,
+            timestamp: (o.timestamp && o.timestamp.toDate) ? o.timestamp.toDate() : new Date()
+          });
+        };
+        actionCell.appendChild(rbtn);
+
+        tr.appendChild(actionCell);
+        tbody.appendChild(tr);
+      });
+    }, err => {
+      console.error('Orders load error:', err);
+    });
+  }
+
+  // Record a walk-in sale: add to orders with walkIn=true and decrement stock
+  async function logWalkIn() {
+    try {
+      const name = document.getElementById('walkName').value.trim();
+      const email = document.getElementById('walkEmail').value.trim();
+      const phone = document.getElementById('walkPhone').value.trim();
+      const partId = document.getElementById('walkPartSelect').value;
+      const qty = parseInt(document.getElementById('walkQty').value || 0, 10);
+      if (!name || !phone || !partId || !qty) { alert('Fill required fields.'); return; }
+
+      const pRef = db.collection('spareParts').doc(partId);
+      const pSnap = await pRef.get();
+      if (!pSnap.exists) { alert('Part not found'); return; }
+      const p = pSnap.data();
+      if ((p.stock ?? 0) < qty) { alert('Insufficient stock'); return; }
+
+      const total = (p.price || 0) * qty;
+
+      await db.collection('orders').add({
+        name, email, phone,
+        partId, quantity: qty,
+        status: 'completed',
+        walkIn: true,
+        timestamp: firebase.firestore.Timestamp.now(),
+        total
+      });
+
+      await pRef.update({ stock: firebase.firestore.FieldValue.increment(-qty) });
+
+      // generate receipt
+      generateReceipt({
+        name, partName: p.name, quantity: qty, price: p.price, total, timestamp: new Date()
+      });
+
+      alert('Walk-in sale recorded.');
+      document.getElementById('walkinForm').reset();
+    } catch (err) {
+      console.error('Walk-in error:', err);
+      alert('Error recording walk-in sale. See console.');
+    }
+  }
+
+  // Reusable receipt generator (same as client)
+  function generateReceipt(o) {
+    try {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF({ unit: 'pt' });
+      doc.setFontSize(18);
+      doc.text('AutoFix Spare Parts — Receipt', 40, 60);
+
+      doc.setFontSize(11);
+      doc.text(`Date: ${o.timestamp.toLocaleString()}`, 40, 90);
+      doc.text(`Customer: ${o.name}`, 40, 110);
+      doc.text(`Item: ${o.partName}`, 40, 130);
+      doc.text(`Quantity: ${o.quantity}`, 40, 150);
+      doc.text(`Price (each): KSh ${numberWithCommas(o.price)}`, 40, 170);
+      doc.setFontSize(13);
+      doc.text(`Total: KSh ${numberWithCommas(o.total)}`, 40, 200);
+
+      doc.setFontSize(10);
+      doc.text('Thank you for your purchase. AutoFix Spare Parts', 40, 240);
+
+      doc.save(`receipt_${Date.now()}.pdf`);
+    } catch (err) { console.error('PDF error', err); }
+  }
+
+  // small helpers
+  function numberWithCommas(x) { if (x===null||x===undefined) return '0'; return x.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ","); }
+  </script>
+</body>
+</html>

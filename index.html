@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>AutoFix Spare Parts — Inventory & Order</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="stylesheet" href="styles.css">
+
+  <!-- Firebase (compat) and jsPDF -->
+  <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-auth-compat.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <h1>AutoFix Spare Parts</h1>
+    <nav>
+      <a href="login.html" class="btn small">Staff Login</a>
+    </nav>
+  </header>
+
+  <main class="container">
+    <section>
+      <input id="searchInput" placeholder="Search parts..." onkeyup="filterParts()" />
+      <h2>Available Spare Parts</h2>
+      <table id="inventoryTable" class="striped">
+        <thead>
+          <tr><th>Name</th><th>Price (KSh)</th><th>Stock</th><th>Order</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Place an Online Order</h2>
+      <form id="orderForm" onsubmit="event.preventDefault(); placeOrder();">
+        <label>Part:</label>
+        <select id="partSelect" required>
+          <option value="">-- Select part --</option>
+        </select>
+
+        <label>Quantity:</label>
+        <input id="orderQty" type="number" min="1" value="1" required />
+
+        <label>Your Name:</label>
+        <input id="custName" type="text" required />
+
+        <label>Email:</label>
+        <input id="custEmail" type="email" required />
+
+        <label>Phone:</label>
+        <input id="custPhone" type="text" required />
+
+        <button class="btn" type="submit">Submit Order</button>
+      </form>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <small>AutoFix Spare Parts — Orders and inventory demo</small>
+  </footer>
+
+  <!-- Main script (edit firebaseConfig below) -->
+  <script src="script.js"></script>
+</body>
+</html>
