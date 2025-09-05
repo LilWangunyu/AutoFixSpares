@@ -1,55 +1,60 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <title>AutoFix Spare Parts — Inventory & Order</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta charset="utf-8"/>
+  <title>AutoFix Spare Parts — Shop</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <link rel="stylesheet" href="styles.css">
 
-  <!-- Firebase (compat) and jsPDF -->
+  <!-- Firebase SDKs -->
   <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-auth-compat.js"></script>
+
+  <!-- jsPDF for receipts -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+  <!-- Your Firebase config (must be created and edited) -->
+  <script src="firebase-config.js"></script>
+  <!-- Customer page script -->
+  <script defer src="script.js"></script>
 </head>
 <body>
   <header class="topbar">
     <h1>AutoFix Spare Parts</h1>
     <nav>
       <a href="login.html" class="btn small">Staff Login</a>
+      <a href="upload_inventory.html" class="btn small" style="margin-left:8px">Upload Inventory</a>
     </nav>
   </header>
 
   <main class="container">
     <section>
-      <input id="searchInput" placeholder="Search parts..." onkeyup="filterParts()" />
+      <input id="searchInput" placeholder="Search parts or tire sizes..." onkeyup="filterParts()" />
       <h2>Available Spare Parts</h2>
       <table id="inventoryTable" class="striped">
-        <thead>
-          <tr><th>Name</th><th>Price (KSh)</th><th>Stock</th><th>Order</th></tr>
-        </thead>
+        <thead><tr><th>Name/Size</th><th>Category</th><th>Price (KSh)</th><th>Stock</th><th>Order</th></tr></thead>
         <tbody></tbody>
       </table>
+      <p class="small-note">Tires are shown with Category = Tires and Size in the name field.</p>
     </section>
 
     <section>
       <h2>Place an Online Order</h2>
       <form id="orderForm" onsubmit="event.preventDefault(); placeOrder();">
-        <label>Part:</label>
-        <select id="partSelect" required>
-          <option value="">-- Select part --</option>
-        </select>
+        <label>Part / Tire</label>
+        <select id="partSelect" required><option value="">-- Select part --</option></select>
 
-        <label>Quantity:</label>
+        <label>Quantity</label>
         <input id="orderQty" type="number" min="1" value="1" required />
 
-        <label>Your Name:</label>
+        <label>Your Name</label>
         <input id="custName" type="text" required />
 
-        <label>Email:</label>
+        <label>Email</label>
         <input id="custEmail" type="email" required />
 
-        <label>Phone:</label>
+        <label>Phone</label>
         <input id="custPhone" type="text" required />
 
         <button class="btn" type="submit">Submit Order</button>
@@ -57,11 +62,6 @@
     </section>
   </main>
 
-  <footer class="footer">
-    <small>AutoFix Spare Parts — Orders and inventory demo</small>
-  </footer>
-
-  <!-- Main script (edit firebaseConfig below) -->
-  <script src="script.js"></script>
+  <footer class="footer"><small>AutoFix Spare Parts — Demo (Test Mode)</small></footer>
 </body>
 </html>
