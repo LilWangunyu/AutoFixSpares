@@ -2,29 +2,28 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Seed Inventory — AutoFix</title>
+  <title>Seed Inventory — AutoFix (Debug)</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <style>
     body{font-family:Arial,Helvetica,sans-serif;max-width:900px;margin:18px auto;padding:12px}
     .btn{background:#1f6feb;color:#fff;padding:10px 14px;border:none;border-radius:6px;cursor:pointer}
     label{display:inline-block;margin:8px 0}
-    textarea{width:100%;min-height:120px;padding:8px;border-radius:6px}
-    pre{background:#f4f6fb;padding:10px;border-radius:6px}
+    pre, code{background:#f4f6fb;padding:10px;border-radius:6px;display:block;white-space:pre-wrap}
     .small{font-size:13px;color:#666}
     .warn{color:#b33}
+    .ok{color:green}
   </style>
 
-  <!-- Firebase SDKs (must be present) -->
+  <!-- Firebase SDKs (must be present and before config block) -->
   <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-firestore-compat.js"></script>
 </head>
 <body>
-  <h2>AutoFix — Seed Inventory to Firestore (Test Mode)</h2>
+  <h2>AutoFix — Seed Inventory (Debug)</h2>
+  <p class="small">Paste your Firebase config in the box below (replace placeholders). Then click <strong>Seed Inventory</strong>.</p>
 
-  <p class="small">Replace the firebaseConfig below with your Firebase Web App configuration before clicking "Seed Inventory".</p>
-
-  <h3>1) Firebase config (edit)</h3>
-  <pre id="configExample" class="small">
+  <h3>Firebase config (paste your object here)</h3>
+  <textarea id="configInput" style="width:100%;min-height:160px;">
 var firebaseConfig = {
   apiKey: "AIzaSyDHhIc-AFmj_YKZqtEk5aNan_qv4jW1-Ss",
   authDomain: "autofixspareparts-c9ff4.firebaseapp.com",
@@ -33,185 +32,171 @@ var firebaseConfig = {
   messagingSenderId: "734766153921",
   appId: "1:734766153921:web:30c08e2964f6b0e2949440"
 };
-  </pre>
+  </textarea>
 
-  <h3>2) Options</h3>
-  <label><input type="checkbox" id="clearBefore" /> Clear existing <code>spareParts</code> collection before seeding (recommended if re-running)</label>
+  <label><input type="checkbox" id="clearBefore" /> Clear existing <code>spareParts</code> collection before seeding</label><br><br>
 
-  <div style="margin-top:12px">
-    <button id="seedBtn" class="btn">Seed Inventory</button>
-    <span id="status" style="margin-left:12px" class="small"></span>
-  </div>
+  <button id="seedBtn" class="btn">Seed Inventory</button>
+  <span id="status" class="small"></span>
 
-  <h3 style="margin-top:18px">Notes</h3>
-  <p class="small">This will create documents inside the Firestore collection <code>spareParts</code>. Items in the "Tires" category include a <code>size</code> field and category set to <code>"Tires"</code>. Default stock is set to <code>10</code> for each item – you can change that in the script below.</p>
+  <h3>Status / Detailed logs</h3>
+  <pre id="log" style="height:240px;overflow:auto"></pre>
 
-  <script>
-  // ===========================
-  // EDIT THIS: your Firebase config
-  // Replace string values with your project's values from Firebase Console -> Project settings -> SDK.
-  // Do NOT remove quotes or trailing commas must be correct.
-  // ===========================
-  var firebaseConfig = {
-    apiKey: "AIzaSyDHhIc-AFmj_YKZqtEk5aNan_qv4jW1-Ss",
-    authDomain: "autofixspareparts-c9ff4.firebaseapp.com",
-    projectId: "autofixspareparts-c9ff4",
-    storageBucket: "autofixspareparts-c9ff4.firebasestorage.app",
-    messagingSenderId: "734766153921",
-    appId: "1:734766153921:web:30c08e2964f6b0e2949440"
-  };
-  // ===========================
+<script>
+(async function(){
+  const seedBtn = document.getElementById('seedBtn');
+  const statusEl = document.getElementById('status');
+  const logEl = document.getElementById('log');
+  const configInput = document.getElementById('configInput');
 
-  // Initialize Firebase
-  if (!firebase.apps.length) {
-    firebase.initializeApp(firebaseConfig);
-  }
-  const db = firebase.firestore();
-
-  // Default stock for each seeded item
+  // Inventory arrays (as before)
   const DEFAULT_STOCK = 10;
-
-  // ---- Seed data (inventory already entered) ----
-  // Regular parts (name, price, category='General')
   const parts = [
-    ["Brake fluid", 300],
-    ["Catol CC", 600],
-    ["lens QR", 600],
-    ["Hand Pump", 1500],
-    ["Diesel 1liter", 350],
-    ["ASF", 350],
-    ["Oil filter", 350],
-    ["Engine mtn E24", 1500],
-    ["machine oil", 60],
-    ["Headgasket TD-27", 2500],
-    ["Balljoint down E24", 2500],
-    ["Brake pad 013", 1500],
-    ["lens complete", 600],
-    ["brakepad VBL", 1500],
-    ["clutch kit 1", 200],
-    ["clutch kit 2", 500],
-    ["chrome nut", 50],
-    ["tape", 50],
-    ["head gasket 5l", 3000],
-    ["combined spanner", 1500],
-    ["brakepad 148", 1700],
-    ["lens shark clear", 200],
-    ["timing belt", 1500],
-    ["Ak grease", 450],
-    ["shark/nsn clutch cylinder", 1500],
-    ["clutch brake", 800],
-    ["silicone tube metal", 500],
-    ["silicone tube clear", 350],
-    ["clutch plate", 2000],
-    ["brake pad 004", 1700],
-    ["h/pipe BTmNSN", 1500],
-    ["complete lens shark", 600],
-    ["glass lens shark", 600],
-    ["balljoint E25 TWN Down", 2400],
-    ["Gasket exhaust", 250],
-    ["horse pipe NSN", 1500],
-    ["horse pipe sharke", 1500],
-    ["Air cleaner", 450],
-    ["secraniser", 500],
-    ["kit", 250],
-    ["clutch disk", 2500],
-    ["bearing hub", 2500],
-    ["stabilizer link", 500],
-    ["radiator cap", 500],
-    ["grease cup", 150],
-    ["bearing 12649", 600],
-    ["Grease foyot", 500],
-    ["kit", 200],
-    ["bolt No.8", 20],
-    ["Bolt no.10", 20],
-    ["bolt no.13", 20],
-    ["bolt no.14", 30],
-    ["bolt no.17", 40],
-    ["brake disk shark", 2500]
+    ["Brake fluid", 300],["Catol CC",600],["lens QR",600],["Hand Pump",1500],
+    ["Diesel 1liter",350],["ASF",350],["Oil filter",350],["Engine mtn E24",1500],
+    ["machine oil",60],["Headgasket TD-27",2500],["Balljoint down E24",2500],
+    ["Brake pad 013",1500],["lens complete",600],["brakepad VBL",1500],
+    ["clutch kit 1",200],["clutch kit 2",500],["chrome nut",50],["tape",50],
+    ["head gasket 5l",3000],["combined spanner",1500],["brakepad 148",1700],
+    ["lens shark clear",200],["timing belt",1500],["Ak grease",450],
+    ["shark/nsn clutch cylinder",1500],["clutch brake",800],["silicone tube metal",500],
+    ["silicone tube clear",350],["clutch plate",2000],["brake pad 004",1700],
+    ["h/pipe BTmNSN",1500],["complete lens shark",600],["glass lens shark",600],
+    ["balljoint E25 TWN Down",2400],["Gasket exhaust",250],["horse pipe NSN",1500],
+    ["horse pipe sharke",1500],["Air cleaner",450],["secraniser",500],["kit",250],
+    ["clutch disk",2500],["bearing hub",2500],["stabilizer link",500],
+    ["radiator cap",500],["grease cup",150],["bearing 12649",600],["Grease foyot",500],
+    ["kit",200],["bolt No.8",20],["Bolt no.10",20],["bolt no.13",20],["bolt no.14",30],
+    ["bolt no.17",40],["brake disk shark",2500]
   ];
+  const tires = [["195/15",6500],["195/14",6400],["195/65/15",5500],["185/70/13",4800],["185/70/14",4800],["175/70/14",4800]];
 
-  // Tires as (size, price) — they will be stored with category 'Tires' and size field
-  const tires = [
-    ["195/15", 6500],
-    ["195/14", 6400],
-    ["195/65/15", 5500],
-    ["185/70/13", 4800],
-    ["185/70/14", 4800],
-    ["175/70/14", 4800]
-  ];
+  function appendLog(...args){
+    console.log(...args);
+    logEl.textContent += args.map(a => (typeof a === 'string'? a : JSON.stringify(a,null,2))).join(' ') + '\n';
+    logEl.scrollTop = logEl.scrollHeight;
+  }
 
-  // Utility: delete all docs in spareParts (batched)
-  async function clearSpareParts() {
+  // Simple safe eval of the config string: extract object literal inside the var firebaseConfig = { ... };
+  function parseConfig(text){
+    try{
+      // Attempt to find the first { ... } block
+      const start = text.indexOf('{');
+      const end = text.lastIndexOf('}');
+      if (start === -1 || end === -1 || end <= start) throw new Error('Could not find object braces { } in config text.');
+      const objText = text.substring(start, end+1);
+      // Replace any smart quotes with straight quotes (defensive)
+      const tidy = objText.replace(/[‘’“”]/g, '"');
+      // Use Function to parse safely (not recommended for untrusted sources, but ok here)
+      // Wrap in parentheses to evaluate as object literal
+      // eslint-disable-next-line no-new-func
+      const parsed = (new Function('return (' + tidy + ');'))();
+      return parsed;
+    } catch(e){
+      throw new Error('Failed to parse firebaseConfig: ' + e.message);
+    }
+  }
+
+  async function clearCollectionIfRequested(db) {
+    const clearBefore = document.getElementById('clearBefore').checked;
+    if (!clearBefore) return 0;
+    appendLog('Clearing existing docs in spareParts...');
     const snapshot = await db.collection('spareParts').get();
-    if (snapshot.empty) return 0;
-    const batchSize = 200; // safe batch size
+    if (snapshot.empty) { appendLog('No existing documents to remove.'); return 0; }
+    const batchSize = 200;
     let deleted = 0;
     const docs = snapshot.docs;
-    for (let i = 0; i < docs.length; i += batchSize) {
+    for (let i = 0; i < docs.length; i += batchSize){
       const batch = db.batch();
       const chunk = docs.slice(i, i + batchSize);
       chunk.forEach(d => batch.delete(d.ref));
       await batch.commit();
       deleted += chunk.length;
+      appendLog(`Deleted chunk of ${chunk.length} documents...`);
     }
+    appendLog(`Cleared ${deleted} documents.`);
     return deleted;
   }
 
-  // Function to seed inventory
-  async function seedInventory() {
-    const statusEl = document.getElementById('status');
-    const clearBefore = document.getElementById('clearBefore').checked;
-    try {
-      statusEl.textContent = 'Working...';
-      // Optionally clear existing collection
-      if (clearBefore) {
-        statusEl.textContent = 'Clearing existing spareParts collection...';
-        const removed = await clearSpareParts();
-        statusEl.textContent = `Cleared ${removed} existing documents. Continuing to seed...`;
-      }
-
-      let added = 0;
-      // Add general parts
-      for (const [name, price] of parts) {
-        const doc = {
-          name: String(name),
-          price: Number(price),
-          stock: DEFAULT_STOCK,
-          category: 'General',
-          createdAt: firebase.firestore.FieldValue.serverTimestamp()
-        };
-        await db.collection('spareParts').add(doc);
-        added++;
-      }
-
-      // Add tires
-      for (const [size, price] of tires) {
-        const doc = {
-          name: `Tire ${size}`,
-          size: String(size),
-          price: Number(price),
-          stock: DEFAULT_STOCK,
-          category: 'Tires',
-          createdAt: firebase.firestore.FieldValue.serverTimestamp()
-        };
-        await db.collection('spareParts').add(doc);
-        added++;
-      }
-
-      statusEl.textContent = `Done. Added ${added} items to spareParts. Check Firestore console.`;
-      // Disable button after success to prevent accidental duplicate runs
-      document.getElementById('seedBtn').disabled = true;
-    } catch (err) {
-      console.error('Seeding error', err);
-      statusEl.innerHTML = '<span class="warn">Error seeding inventory. See console for details.</span>';
+  async function seed(db) {
+    let added = 0;
+    appendLog('Seeding general parts (' + parts.length + ')...');
+    for (const [name, price] of parts) {
+      const doc = { name: String(name), price: Number(price), stock: DEFAULT_STOCK, category: 'General', createdAt: firebase.firestore.FieldValue.serverTimestamp() };
+      await db.collection('spareParts').add(doc);
+      added++;
+      if (added % 20 === 0) appendLog(`Added ${added} items so far...`);
     }
+    appendLog('Seeding tires (' + tires.length + ')...');
+    for (const [size, price] of tires) {
+      const doc = { name: `Tire ${size}`, size: String(size), price: Number(price), stock: DEFAULT_STOCK, category: 'Tires', createdAt: firebase.firestore.FieldValue.serverTimestamp() };
+      await db.collection('spareParts').add(doc);
+      added++;
+    }
+    appendLog(`Seeding complete. ${added} documents added.`);
+    return added;
   }
 
-  // Wire up button
-  document.getElementById('seedBtn').addEventListener('click', async () => {
-    if (!confirm('Are you sure you want to seed the inventory into Firestore? Make sure firebaseConfig is set and Firestore is in test mode.')) return;
-    await seedInventory();
+  seedBtn.addEventListener('click', async () => {
+    try{
+      statusEl.textContent = 'Starting...';
+      logEl.textContent = '';
+      appendLog('Parsing firebaseConfig from input...');
+      const configText = configInput.value.trim();
+      if (!configText) { statusEl.textContent = 'Please paste your firebaseConfig in the box above.'; return; }
+
+      let cfg;
+      try { cfg = parseConfig(configText); }
+      catch(e){ appendLog('CONFIG PARSE ERROR:', e.message); statusEl.textContent = 'Config parse error — see log.'; return; }
+
+      // Validate minimal keys
+      const required = ['apiKey','authDomain','projectId','appId'];
+      for (const k of required){
+        if (!cfg[k] || cfg[k].includes('REPLACE')) { appendLog('Config missing or has REPLACE placeholder for key:', k); statusEl.textContent = `Config problem: ${k} missing or placeholder.`; return; }
+      }
+
+      appendLog('Initializing Firebase app (debug)...');
+      // Initialize firebase app (use a unique name each run to avoid conflicts in dev env)
+      try {
+        const appName = 'seedApp_' + Math.floor(Math.random()*100000);
+        firebase.initializeApp(cfg, appName);
+      } catch(eInit) {
+        // if app already exists, still try to get default app
+        appendLog('Firebase init warning:', eInit.message);
+      }
+      // get the last-initialized app
+      const apps = firebase.apps;
+      const app = apps[apps.length - 1];
+      const db = app.firestore();
+
+      appendLog('Testing Firestore read permissions (attempting a small query)...');
+      try {
+        await db.collection('spareParts').limit(1).get();
+        appendLog('Firestore read OK (no permission error detected).');
+      } catch(readErr) {
+        appendLog('Firestore read failed:', readErr.code || readErr.name || '', readErr.message || readErr);
+        statusEl.textContent = 'Firestore read failed — likely a security rules / permission issue. See log for details.';
+        return;
+      }
+
+      // Ask user to confirm before writing
+      if (!confirm('Seed will add documents to spareParts collection. Continue?')) { statusEl.textContent = 'Canceled by user.'; return; }
+
+      // Clear if requested
+      await clearCollectionIfRequested(db);
+
+      // Seed
+      const added = await seed(db);
+      statusEl.textContent = `Success — added ${added} items.`;
+      appendLog('SUCCESS: You may now check Firestore console.');
+    } catch(err) {
+      console.error('Seeding caught error:', err);
+      appendLog('SEED ERROR: ' + (err && (err.message || err.toString())));
+      statusEl.textContent = 'Error seeding inventory — check log and console.';
+    }
   });
-  </script>
+
+})();
+</script>
 </body>
 </html>
